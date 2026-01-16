@@ -1,15 +1,17 @@
 // Public profile API - handles GET and PUT requests
 import User from '../../models/User'
+import { getUserFromEvent } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
   const method = event.method
+  
+  // Try to get the authenticated user from JWT token
+  const authUser = await getUserFromEvent(event)
+  const userId = authUser?.id
 
   if (method === 'GET') {
     // Get profile
     try {
-      // Try to get the authenticated user
-      const userId = event.context.user?.id
-      
       if (userId) {
         const user = await User.findById(userId).select('-password -verificationToken -resetPasswordToken')
         
@@ -58,9 +60,6 @@ export default defineEventHandler(async (event) => {
     try {
       const body = await readBody(event)
       const { name, email, bio } = body
-      
-      // Try to get the authenticated user
-      const userId = event.context.user?.id
       
       if (userId) {
         // Update authenticated user
