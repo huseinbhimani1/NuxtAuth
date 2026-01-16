@@ -52,6 +52,7 @@ export const useOfflineApi = () => {
 
   /**
    * Fetch data with offline support
+   * Uses cache-first strategy when offline, network-first when online
    */
   const fetchWithCache = async <T>(
     url: string,
@@ -60,12 +61,27 @@ export const useOfflineApi = () => {
   ): Promise<T | null> => {
     const key = cacheKey || url
 
+    // If offline, use cache-first strategy
+    if (!online.value) {
+      console.log('Offline: Loading from cache...', key)
+      const cached = await storage.get<T>(key)
+      
+      if (cached) {
+        console.log('Serving from cache (offline):', key)
+        return cached
+      }
+      
+      console.warn('No cached data available for:', key)
+      throw new Error('You are offline and no cached data is available')
+    }
+
+    // Online: Try network first, fallback to cache
     try {
-      // Try to fetch from API first (network-first strategy)
+      console.log('Online: Fetching from API...', url)
       const data = await $fetch<T>(url, options)
       
-      // Cache the successful response
-      await storage.save(key, data, { ttl: 300 }) // Cache for 5 minutes
+      // Cache the successful response (24 hours TTL for better offline support)
+      await storage.save(key, data, { ttl: 86400 })
       
       return data
     } catch (error: any) {
@@ -75,7 +91,7 @@ export const useOfflineApi = () => {
       const cached = await storage.get<T>(key)
       
       if (cached) {
-        console.log('Serving from cache:', key)
+        console.log('Serving from cache (API failed):', key)
         return cached
       }
       
@@ -90,8 +106,10 @@ export const useOfflineApi = () => {
   const updateWithQueue = async <T>(
     url: string,
     data: any,
-    options: any = {}
+    options: any = {},
+    cacheKey?: string
   ): Promise<{ success: boolean; queued?: boolean }> => {
+    const key = cacheKey || url
     const requestOptions = {
       ...options,
       method: options.method || 'PUT',
@@ -104,11 +122,12 @@ export const useOfflineApi = () => {
       await storage.queueAction({
         url,
         data,
-        options: requestOptions
+        options: requestOptions,
+        cacheKey: key
       })
       
-      // Update local cache optimistically
-      await storage.save(url, data)
+      // Update local cache optimistically with consistent cache key
+      await storage.save(key, { user: data }, { ttl: 86400 })
       
       return { success: true, queued: true }
     }
@@ -116,8 +135,8 @@ export const useOfflineApi = () => {
     try {
       const response = await $fetch<T>(url, requestOptions)
       
-      // Update cache with new data
-      await storage.save(url, response)
+      // Update cache with new data using consistent cache key
+      await storage.save(key, response, { ttl: 86400 })
       
       return { success: true }
     } catch (error: any) {
@@ -127,8 +146,12 @@ export const useOfflineApi = () => {
       await storage.queueAction({
         url,
         data,
-        options: requestOptions
+        options: requestOptions,
+        cacheKey: key
       })
+      
+      // Save optimistically to cache
+      await storage.save(key, { user: data }, { ttl: 86400 })
       
       return { success: false, queued: true }
     }
@@ -147,7 +170,14 @@ export const useOfflineApi = () => {
   const updateProfile = async (profileData: any) => {
     return await updateWithQueue('/api/public/profile', profileData, {
       method: 'PUT'
-    })
+    }, 'user-profile') // Use same cache key as getProfile
+  }
+
+  /**
+   * Check if there are queued actions pending
+   */
+  const hasQueuedActions = async (): Promise<boolean> => {
+    return await storage.hasQueuedActions()
   }
 
   return {
@@ -155,6 +185,7 @@ export const useOfflineApi = () => {
     fetchWithCache,
     updateWithQueue,
     processQueuedActions,
+    hasQueuedActions,
     getProfile,
     updateProfile
   }

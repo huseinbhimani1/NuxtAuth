@@ -228,26 +228,54 @@ export const useOfflineStorage = () => {
       const database = await initDB()
       if (!database) return
 
-      const transaction = database.transaction(['queue'], 'readwrite')
+      const transaction = database.transaction(['queue'], 'readonly')
       const store = transaction.objectStore('queue')
 
-      const request = store.getAll()
-      request.onsuccess = async () => {
-        const actions = request.result
-        for (const action of actions) {
-          try {
-            await processor(action)
-            // Remove from queue after successful processing
-            const deleteTransaction = database.transaction(['queue'], 'readwrite')
-            const deleteStore = deleteTransaction.objectStore('queue')
-            deleteStore.delete(action.id)
-          } catch (error) {
-            console.error('Error processing queued action:', error)
+      return new Promise((resolve, reject) => {
+        const request = store.getAll()
+        request.onsuccess = async () => {
+          const actions = request.result
+          for (const action of actions) {
+            try {
+              await processor(action)
+              // Remove from queue after successful processing
+              const deleteTransaction = database.transaction(['queue'], 'readwrite')
+              const deleteStore = deleteTransaction.objectStore('queue')
+              deleteStore.delete(action.id)
+            } catch (error) {
+              console.error('Error processing queued action:', error)
+            }
           }
+          resolve()
         }
-      }
+        request.onerror = () => reject(request.error)
+      })
     } catch (error) {
       console.error('Error processing queue:', error)
+    }
+  }
+
+  /**
+   * Check if there are queued actions
+   */
+  const hasQueuedActions = async (): Promise<boolean> => {
+    try {
+      const database = await initDB()
+      if (!database) return false
+
+      const transaction = database.transaction(['queue'], 'readonly')
+      const store = transaction.objectStore('queue')
+
+      return new Promise((resolve) => {
+        const request = store.count()
+        request.onsuccess = () => {
+          resolve(request.result > 0)
+        }
+        request.onerror = () => resolve(false)
+      })
+    } catch (error) {
+      console.error('Error checking queue:', error)
+      return false
     }
   }
 
@@ -258,6 +286,7 @@ export const useOfflineStorage = () => {
     remove,
     clear,
     queueAction,
-    processQueue
+    processQueue,
+    hasQueuedActions
   }
 }

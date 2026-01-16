@@ -176,7 +176,7 @@ definePageMeta({
   middleware: ['auth-guard']
 })
 
-const { online, getProfile, updateProfile, processQueuedActions } = useOfflineApi()
+const { online, getProfile, updateProfile, processQueuedActions, hasQueuedActions } = useOfflineApi()
 
 const profile = ref<any>(null)
 const formData = ref({
@@ -194,6 +194,8 @@ const hasQueuedChanges = ref(false)
 
 // Load profile on mount
 onMounted(async () => {
+  // Check for any queued changes from previous sessions
+  hasQueuedChanges.value = await hasQueuedActions()
   await loadProfile()
 })
 
@@ -210,6 +212,14 @@ const loadProfile = async () => {
         name: data.user?.name || data.name || '',
         email: data.user?.email || data.email || '',
         bio: data.user?.bio || data.bio || ''
+      }
+      
+      // Show indicator if we're offline
+      if (!online.value) {
+        successMessage.value = 'Loaded from local storage (offline)'
+        setTimeout(() => {
+          successMessage.value = ''
+        }, 2000)
       }
     }
   } catch (err: any) {
@@ -249,8 +259,17 @@ const handleSave = async () => {
 }
 
 const handleRefresh = async () => {
+  // If offline, just show message - don't try to fetch from server
+  if (!online.value) {
+    successMessage.value = 'Cannot refresh while offline - showing cached data'
+    setTimeout(() => {
+      successMessage.value = ''
+    }, 2000)
+    return
+  }
+  
   await loadProfile()
-  successMessage.value = 'Profile refreshed!'
+  successMessage.value = 'Profile refreshed from server!'
   setTimeout(() => {
     successMessage.value = ''
   }, 2000)
@@ -273,6 +292,8 @@ const handleSync = async () => {
     error.value = 'Failed to sync changes. Please try again.'
   } finally {
     syncing.value = false
+    // Re-check queue status
+    hasQueuedChanges.value = await hasQueuedActions()
   }
 }
 
