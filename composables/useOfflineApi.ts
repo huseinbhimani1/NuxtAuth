@@ -37,11 +37,8 @@ export const useOfflineApi = () => {
 
     window.addEventListener('online', () => {
       onlineState.value = true
-      console.log('Back online! Processing queued actions...')
-      // Process any queued actions
-      if (queueProcessor) {
-        queueProcessor()
-      }
+      console.log('Back online! You can now sync your changes.')
+      // Manual sync - user must tap Sync Now button
     })
 
     window.addEventListener('offline', () => {
