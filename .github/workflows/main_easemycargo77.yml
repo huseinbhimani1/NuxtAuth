@@ -69,6 +69,7 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'EasemyCargo77'
+          resource-group-name: 'resourcegorup-easemycargo'
           slot-name: 'Production'
           package: .
         continue-on-error: false
