@@ -46,6 +46,9 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    env:
+      # Expose secret to env so it can be used in `if:` conditions
+      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
     
     steps:
       - name: Download artifact from build job
@@ -61,14 +64,14 @@ jobs:
 
       # Prefer Service Principal with client secret if provided
       - name: Azure Login (Service Principal)
-        if: ${{ secrets.AZURE_CREDENTIALS != '' }}
+        if: ${{ env.AZURE_CREDENTIALS != '' }}
         uses: azure/login@v2
         with:
-          credentials: ${{ secrets.AZURE_CREDENTIALS }}
+          credentials: ${{ env.AZURE_CREDENTIALS }}
 
       # Fallback to OIDC federated credential login
       - name: Azure Login (OIDC)
-        if: ${{ secrets.AZURE_CREDENTIALS == '' }}
+        if: ${{ env.AZURE_CREDENTIALS == '' }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_EF1279B8D1334749BC220B56CEBC4E2C }}
