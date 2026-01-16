@@ -154,6 +154,10 @@
 </template>
 
 <script setup lang="ts">
+definePageMeta({
+  middleware: ['auth-guard']
+})
+
 const { online, getProfile, updateProfile } = useOfflineApi()
 
 const profile = ref<any>(null)
