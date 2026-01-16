@@ -1,9 +1,10 @@
 name: Build and deploy Nuxt 3 App to Azure Web App - CargoNuxt
 
 on:
-  push:
-    branches:
-      - main
+  # Disabled - using main_easemycargo77.yml instead
+  # push:
+  #   branches:
+  #     - main
   workflow_dispatch:
 
 jobs:
