@@ -32,6 +32,13 @@ const UserSchema = new Schema<IUserDocument>(
       lowercase: true,
       trim: true,
     },
+    bio: {
+      type: String,
+      required: false,
+      trim: true,
+      maxlength: [500, 'Bio cannot exceed 500 characters'],
+      default: '',
+    },
     password: {
       type: String,
       required: [true, 'Password is required'],

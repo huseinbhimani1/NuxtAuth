@@ -4,6 +4,10 @@ import { resolve } from 'path'
 export default defineNuxtConfig({
   compatibilityDate: '2024-05-15',
   devtools: { enabled: true },
+  devServer: {
+    host: '0.0.0.0', // Listen on all network interfaces
+    port: 3000
+  },
   nitro: {
     preset: 'node-server'
   },
