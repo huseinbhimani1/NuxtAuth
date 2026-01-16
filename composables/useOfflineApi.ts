@@ -3,26 +3,55 @@
  * Automatically caches responses and handles offline scenarios
  */
 
+// Shared reactive state for online status (singleton pattern)
+const onlineState = ref(true)
+let isInitialized = false
+let queueProcessor: (() => Promise<void>) | null = null
+
 export const useOfflineApi = () => {
   const storage = useOfflineStorage()
-  const online = ref(true)
 
-  // Monitor online/offline status
-  if (process.client) {
-    online.value = navigator.onLine
+  /**
+   * Process queued actions when back online
+   */
+  const processQueuedActions = async () => {
+    await storage.processQueue(async (action) => {
+      try {
+        console.log('Processing queued action:', action.url)
+        await $fetch(action.url, action.options)
+        console.log('Successfully synced:', action.url)
+      } catch (error) {
+        console.error('Failed to sync queued action:', error)
+        throw error // Will keep in queue
+      }
+    })
+  }
+
+  // Store reference for event listener
+  queueProcessor = processQueuedActions
+
+  // Initialize online/offline listeners only once
+  if (process.client && !isInitialized) {
+    isInitialized = true
+    onlineState.value = navigator.onLine
 
     window.addEventListener('online', () => {
-      online.value = true
+      onlineState.value = true
       console.log('Back online! Processing queued actions...')
       // Process any queued actions
-      processQueuedActions()
+      if (queueProcessor) {
+        queueProcessor()
+      }
     })
 
     window.addEventListener('offline', () => {
-      online.value = false
+      onlineState.value = false
       console.log('Gone offline. Data will be cached locally.')
     })
   }
+
+  // Use computed to ensure reactivity
+  const online = computed(() => onlineState.value)
 
   /**
    * Fetch data with offline support
@@ -106,22 +135,6 @@ export const useOfflineApi = () => {
       
       return { success: false, queued: true }
     }
-  }
-
-  /**
-   * Process queued actions when back online
-   */
-  const processQueuedActions = async () => {
-    await storage.processQueue(async (action) => {
-      try {
-        console.log('Processing queued action:', action.url)
-        await $fetch(action.url, action.options)
-        console.log('Successfully synced:', action.url)
-      } catch (error) {
-        console.error('Failed to sync queued action:', error)
-        throw error // Will keep in queue
-      }
-    })
   }
 
   /**
