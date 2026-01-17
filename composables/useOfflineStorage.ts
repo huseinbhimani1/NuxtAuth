@@ -19,22 +19,26 @@ export const useOfflineStorage = () => {
 
     // Check if IndexedDB is supported
     if (!('indexedDB' in window)) {
-      console.warn('IndexedDB not supported')
+      console.warn('⚠️ IndexedDB not supported, will use localStorage')
       return null
     }
 
     try {
+      console.log('🔧 Initializing IndexedDB...')
       const request = indexedDB.open('EaseMyCargoDB', 1)
 
       request.onupgradeneeded = (event) => {
         const database = (event.target as IDBOpenDBRequest).result
+        console.log('📦 Creating object stores...')
         
         // Create object stores if they don't exist
         if (!database.objectStoreNames.contains('cache')) {
           database.createObjectStore('cache', { keyPath: 'key' })
+          console.log('✅ Created "cache" store')
         }
         if (!database.objectStoreNames.contains('queue')) {
           database.createObjectStore('queue', { keyPath: 'id', autoIncrement: true })
+          console.log('✅ Created "queue" store')
         }
       }
 
@@ -42,15 +46,19 @@ export const useOfflineStorage = () => {
         request.onsuccess = () => {
           db = request.result
           isSupported.value = true
+          console.log('✅ IndexedDB initialized successfully')
           resolve(db)
         }
         request.onerror = () => {
-          console.error('Failed to open IndexedDB:', request.error)
+          console.error('❌ Failed to open IndexedDB:', request.error)
           reject(request.error)
+        }
+        request.onblocked = () => {
+          console.warn('⚠️ IndexedDB upgrade blocked, close other tabs')
         }
       })
     } catch (error) {
-      console.error('IndexedDB initialization error:', error)
+      console.error('❌ IndexedDB initialization error:', error)
       return null
     }
   }
@@ -82,11 +90,27 @@ export const useOfflineStorage = () => {
 
       return new Promise((resolve, reject) => {
         const request = store.put(data)
-        request.onsuccess = () => resolve(true)
-        request.onerror = () => reject(request.error)
+        request.onsuccess = () => {
+          console.log('✅ Saved to IndexedDB:', key)
+          resolve(true)
+        }
+        request.onerror = () => {
+          console.error('❌ IndexedDB save failed:', request.error)
+          reject(request.error)
+        }
       })
     } catch (error) {
-      console.error('Error saving to offline storage:', error)
+      console.error('Error saving to IndexedDB, trying localStorage fallback:', error)
+      // Fallback to localStorage if IndexedDB fails
+      try {
+        if (process.client && window.localStorage) {
+          localStorage.setItem(key, JSON.stringify({ value, timestamp: Date.now(), ttl: options?.ttl }))
+          console.log('✅ Saved to localStorage (fallback):', key)
+          return true
+        }
+      } catch (lsError) {
+        console.error('❌ localStorage fallback also failed:', lsError)
+      }
       return false
     }
   }

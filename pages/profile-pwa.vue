@@ -239,7 +239,9 @@ const handleSave = async () => {
   error.value = ''
 
   try {
+    console.log('💾 Saving profile...', { online: online.value, formData: formData.value })
     const result = await updateProfile(formData.value)
+    console.log('📊 Update result:', result)
     
     if (result.queued) {
       // Update local profile object to reflect changes immediately
@@ -251,15 +253,18 @@ const handleSave = async () => {
           updatedAt: new Date().toISOString()
         }
       }
-      successMessage.value = 'Saved locally! Will sync when online.'
+      successMessage.value = '✅ Saved locally! Will sync when online.'
       hasQueuedChanges.value = true
+      console.log('✅ Profile saved locally (offline mode)')
     } else if (result.success) {
-      successMessage.value = 'Profile updated successfully!'
+      successMessage.value = '✅ Profile updated successfully!'
       hasQueuedChanges.value = false
       // Reload from server to get latest data
       await loadProfile()
+      console.log('✅ Profile synced to server')
     } else {
-      error.value = 'Failed to update profile'
+      error.value = '❌ Failed to update profile'
+      console.error('❌ Update failed:', result)
     }
 
     // Clear message after 3 seconds
@@ -267,7 +272,13 @@ const handleSave = async () => {
       successMessage.value = ''
     }, 3000)
   } catch (err: any) {
-    error.value = err.message || 'Failed to save profile'
+    const errorMsg = err.message || 'Failed to save profile'
+    error.value = '❌ ' + errorMsg
+    console.error('❌ Save error:', err)
+    // Alert on mobile for debugging
+    if (process.client && !online.value) {
+      alert('Offline save error: ' + errorMsg + '. Check if storage is enabled.')
+    }
   } finally {
     saving.value = false
   }
