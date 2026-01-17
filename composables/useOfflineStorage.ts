@@ -238,13 +238,22 @@ export const useOfflineStorage = () => {
       const transaction = database.transaction(['queue'], 'readwrite')
       const store = transaction.objectStore('queue')
 
+      // Serialize the entire action object to ensure it's cloneable
+      const serializedAction = JSON.parse(JSON.stringify({ ...action, timestamp: Date.now() }))
+
       return new Promise((resolve, reject) => {
-        const request = store.add({ ...action, timestamp: Date.now() })
-        request.onsuccess = () => resolve(true)
-        request.onerror = () => reject(request.error)
+        const request = store.add(serializedAction)
+        request.onsuccess = () => {
+          console.log('✅ Action queued for sync')
+          resolve(true)
+        }
+        request.onerror = () => {
+          console.error('❌ Failed to queue action:', request.error)
+          reject(request.error)
+        }
       })
     } catch (error) {
-      console.error('Error queueing action:', error)
+      console.error('❌ Error queueing action:', error)
       return false
     }
   }
