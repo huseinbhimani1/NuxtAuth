@@ -346,9 +346,22 @@ const handleSave = async () => {
     const errorMsg = err.message || 'Failed to save profile'
     error.value = '❌ ' + errorMsg
     console.error('❌ Save error:', err)
-    // Alert on mobile for debugging
+    console.error('❌ Error stack:', err.stack)
+    console.error('❌ Error name:', err.name)
+    
+    // Detailed alert on mobile for debugging
     if (process.client && !online.value) {
-      alert('Offline save error: ' + errorMsg + '. Check if storage is enabled.')
+      const details = `
+Offline save failed!
+Error: ${err.name || 'Unknown'}
+Message: ${errorMsg}
+Storage Status:
+- IndexedDB: ${storageStatus.value.indexedDB ? 'OK' : 'FAIL'}
+- localStorage: ${storageStatus.value.localStorage ? 'OK' : 'FAIL'}
+
+Check browser console for details.
+      `.trim()
+      alert(details)
     }
   } finally {
     saving.value = false

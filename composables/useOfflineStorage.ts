@@ -72,18 +72,23 @@ export const useOfflineStorage = () => {
       if (!database) {
         // Fallback to localStorage
         if (process.client && window.localStorage) {
-          localStorage.setItem(key, JSON.stringify({ value, timestamp: Date.now() }))
+          console.log('📝 IndexedDB unavailable, using localStorage for:', key)
+          localStorage.setItem(key, JSON.stringify({ value, timestamp: Date.now(), ttl: options?.ttl }))
           return true
         }
+        console.error('❌ No storage available (IndexedDB and localStorage both failed)')
         return false
       }
 
       const transaction = database.transaction(['cache'], 'readwrite')
       const store = transaction.objectStore('cache')
       
+      // Serialize the value to ensure it's cloneable
+      const serializedValue = JSON.parse(JSON.stringify(value))
+      
       const data = {
         key,
-        value,
+        value: serializedValue,
         timestamp: Date.now(),
         ttl: options?.ttl
       }
