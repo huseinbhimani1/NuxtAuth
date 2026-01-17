@@ -270,9 +270,10 @@ const handleSave = async () => {
 }
 
 const handleRefresh = async () => {
-  // If offline, just show message - don't try to fetch from server
   if (!online.value) {
-    successMessage.value = 'Cannot refresh while offline - showing cached data'
+    // Load from cache instead of showing message
+    await loadProfile()
+    successMessage.value = 'Loaded from local storage (offline)'
     setTimeout(() => {
       successMessage.value = ''
     }, 2000)
