@@ -119,16 +119,20 @@ export const useOfflineApi = () => {
     if (!online.value) {
       // Queue the request for later
       console.log('Offline: Queueing request for later')
+      
+      // Convert to plain object to avoid "could not be cloned" error
+      const plainData = JSON.parse(JSON.stringify(data))
+      
       await storage.queueAction({
         url,
-        data,
+        data: plainData,
         options: requestOptions,
         cacheKey: key
       })
       
       // Update local cache optimistically with correct structure matching API response
       await storage.save(key, {
-        user: data,
+        user: plainData,
         success: true,
         message: 'Changes saved locally (offline mode)'
       }, { ttl: 86400 })
@@ -147,16 +151,18 @@ export const useOfflineApi = () => {
       console.error('Update failed:', error.message)
       
       // Queue for retry
+      const plainData = JSON.parse(JSON.stringify(data))
+      
       await storage.queueAction({
         url,
-        data,
+        data: plainData,
         options: requestOptions,
         cacheKey: key
       })
       
       // Save optimistically to cache with correct structure
       await storage.save(key, {
-        user: data,
+        user: plainData,
         success: true,
         message: 'Changes saved locally (will retry)'
       }, { ttl: 86400 })
