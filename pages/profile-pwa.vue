@@ -40,10 +40,14 @@
           </svg>
           <span class="text-red-700">{{ error }}</span>
         </div>
+        <!-- Show empty form if offline with no cached data -->
+        <div v-if="!online" class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded">
+          <p class="text-sm text-blue-700">You're offline with no saved profile. You can still edit and save locally!</p>
+        </div>
       </div>
 
-      <!-- Profile Content -->
-      <div v-if="profile" class="bg-white rounded-lg shadow-md p-6">
+      <!-- Profile Content (Show even if offline with no data) -->
+      <div v-if="profile || !online" class="bg-white rounded-lg shadow-md p-6">
         <!-- Queued Changes Banner with Sync Button -->
         <div v-if="hasQueuedChanges" class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
           <div class="flex items-center justify-between">
