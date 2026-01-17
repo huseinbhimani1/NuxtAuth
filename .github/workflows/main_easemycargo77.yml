@@ -4,6 +4,12 @@
 name: Build and deploy Node.js app to Azure Web App - EasemyCargo77
 
 on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
