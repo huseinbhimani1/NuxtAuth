@@ -126,8 +126,12 @@ export const useOfflineApi = () => {
         cacheKey: key
       })
       
-      // Update local cache optimistically with consistent cache key
-      await storage.save(key, { user: data }, { ttl: 86400 })
+      // Update local cache optimistically with correct structure matching API response
+      await storage.save(key, {
+        user: data,
+        success: true,
+        message: 'Changes saved locally (offline mode)'
+      }, { ttl: 86400 })
       
       return { success: true, queued: true }
     }
@@ -150,8 +154,12 @@ export const useOfflineApi = () => {
         cacheKey: key
       })
       
-      // Save optimistically to cache
-      await storage.save(key, { user: data }, { ttl: 86400 })
+      // Save optimistically to cache with correct structure
+      await storage.save(key, {
+        user: data,
+        success: true,
+        message: 'Changes saved locally (will retry)'
+      }, { ttl: 86400 })
       
       return { success: false, queued: true }
     }

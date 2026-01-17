@@ -238,11 +238,22 @@ const handleSave = async () => {
     const result = await updateProfile(formData.value)
     
     if (result.queued) {
+      // Update local profile object to reflect changes immediately
+      profile.value = {
+        ...profile.value,
+        user: {
+          ...profile.value?.user,
+          ...formData.value,
+          updatedAt: new Date().toISOString()
+        }
+      }
       successMessage.value = 'Saved locally! Will sync when online.'
       hasQueuedChanges.value = true
     } else if (result.success) {
       successMessage.value = 'Profile updated successfully!'
       hasQueuedChanges.value = false
+      // Reload from server to get latest data
+      await loadProfile()
     } else {
       error.value = 'Failed to update profile'
     }
