@@ -170,6 +170,27 @@
             <li>✅ Fast loading with service worker</li>
           </ul>
         </div>
+
+        <!-- Storage Status -->
+        <div v-if="storageStatus.checked" class="mt-4 p-4 rounded-lg border" :class="storageStatus.indexedDB || storageStatus.localStorage ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'">
+          <h3 class="font-semibold mb-2" :class="storageStatus.indexedDB || storageStatus.localStorage ? 'text-green-900' : 'text-red-900'">
+            💾 Storage Status:
+          </h3>
+          <ul class="text-sm space-y-1">
+            <li :class="storageStatus.indexedDB ? 'text-green-700' : 'text-red-700'">
+              {{ storageStatus.indexedDB ? '✅' : '❌' }} IndexedDB: {{ storageStatus.indexedDB ? 'Available' : 'Not Available' }}
+            </li>
+            <li :class="storageStatus.localStorage ? 'text-green-700' : 'text-red-700'">
+              {{ storageStatus.localStorage ? '✅' : '❌' }} localStorage: {{ storageStatus.localStorage ? 'Available' : 'Not Available' }}
+            </li>
+            <li v-if="!storageStatus.indexedDB && !storageStatus.localStorage" class="text-red-700 font-semibold mt-2">
+              ⚠️ Storage is disabled. Please enable storage in your browser settings or disable private browsing mode.
+            </li>
+            <li v-else-if="!storageStatus.indexedDB && storageStatus.localStorage" class="text-yellow-700 mt-2">
+              ℹ️ Using localStorage fallback (IndexedDB unavailable)
+            </li>
+          </ul>
+        </div>
       </div>
     </div>
   </div>
@@ -195,9 +216,59 @@ const syncing = ref(false)
 const error = ref('')
 const successMessage = ref('')
 const hasQueuedChanges = ref(false)
+const storageStatus = ref({
+  indexedDB: false,
+  localStorage: false,
+  checked: false
+})
+
+// Check storage availability
+const checkStorageAvailability = async () => {
+  if (!process.client) return
+  
+  // Check localStorage
+  try {
+    const testKey = '__storage_test__'
+    localStorage.setItem(testKey, 'test')
+    localStorage.removeItem(testKey)
+    storageStatus.value.localStorage = true
+    console.log('✅ localStorage: Available')
+  } catch (e) {
+    storageStatus.value.localStorage = false
+    console.error('❌ localStorage: Not available', e)
+  }
+  
+  // Check IndexedDB
+  try {
+    if (!('indexedDB' in window)) {
+      storageStatus.value.indexedDB = false
+      console.error('❌ IndexedDB: Not supported')
+      return
+    }
+    
+    const testDB = indexedDB.open('__test_db__', 1)
+    testDB.onsuccess = () => {
+      storageStatus.value.indexedDB = true
+      console.log('✅ IndexedDB: Available')
+      indexedDB.deleteDatabase('__test_db__')
+    }
+    testDB.onerror = (e) => {
+      storageStatus.value.indexedDB = false
+      console.error('❌ IndexedDB: Not available', e)
+    }
+  } catch (e) {
+    storageStatus.value.indexedDB = false
+    console.error('❌ IndexedDB: Error', e)
+  }
+  
+  storageStatus.value.checked = true
+}
 
 // Load profile on mount
 onMounted(async () => {
+  // Check storage first
+  await checkStorageAvailability()
+  
   // Check for any queued changes from previous sessions
   hasQueuedChanges.value = await hasQueuedActions()
   await loadProfile()
