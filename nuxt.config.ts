@@ -88,7 +88,31 @@ export default defineNuxtConfig({
     workbox: {
       navigateFallback: '/',
       globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
+      // Clean old caches on activation
+      cleanupOutdatedCaches: true,
+      // Skip waiting and immediately activate new service worker
+      skipWaiting: true,
+      clientsClaim: true,
       runtimeCaching: [
+        // Cache HTML pages with NetworkFirst strategy
+        {
+          urlPattern: ({ request, url }) => 
+            request.destination === 'document' || 
+            url.pathname.match(/^\/(profile-pwa|dashboard|login)/) !== null,
+          handler: 'NetworkFirst',
+          options: {
+            cacheName: 'pages-cache',
+            expiration: {
+              maxEntries: 50,
+              maxAgeSeconds: 86400 // 24 hours
+            },
+            networkTimeoutSeconds: 3, // Fallback to cache after 3s timeout
+            cacheableResponse: {
+              statuses: [0, 200]
+            }
+          }
+        },
+        // Cache API calls with NetworkFirst
         {
           urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
           handler: 'NetworkFirst',
@@ -97,6 +121,26 @@ export default defineNuxtConfig({
             expiration: {
               maxEntries: 50,
               maxAgeSeconds: 300 // 5 minutes
+            },
+            networkTimeoutSeconds: 5,
+            cacheableResponse: {
+              statuses: [0, 200]
+            }
+          }
+        },
+        // Cache static assets with CacheFirst
+        {
+          urlPattern: ({ request }) => 
+            request.destination === 'style' ||
+            request.destination === 'script' ||
+            request.destination === 'image' ||
+            request.destination === 'font',
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'assets-cache',
+            expiration: {
+              maxEntries: 100,
+              maxAgeSeconds: 2592000 // 30 days
             },
             cacheableResponse: {
               statuses: [0, 200]

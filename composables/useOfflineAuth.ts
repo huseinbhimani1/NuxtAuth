@@ -4,6 +4,11 @@
 
 import { useOfflineStorage } from './useOfflineStorage';
 
+interface UserData {
+  email?: string;
+  [key: string]: any;
+}
+
 export const useOfflineAuth = () => {
   const storage = useOfflineStorage();
   const AUTH_CACHE_KEY = 'auth_user_data';
@@ -35,10 +40,10 @@ export const useOfflineAuth = () => {
   /**
    * Get cached user data (for offline use)
    */
-  const getCachedUserData = async () => {
+  const getCachedUserData = async (): Promise<UserData | null> => {
     try {
       console.log('🔍 [Offline Auth] Retrieving cached user data');
-      const userData = await storage.get(AUTH_CACHE_KEY);
+      const userData = await storage.get(AUTH_CACHE_KEY) as UserData | null;
       
       if (userData) {
         console.log('✅ [Offline Auth] Found cached user:', userData?.email);
