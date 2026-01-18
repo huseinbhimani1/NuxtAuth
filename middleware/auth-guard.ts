@@ -1,12 +1,17 @@
-// middleware/auth-guard.ts - Consolidated authentication and authorization middleware
+// middleware/auth-guard.ts - Consolidated authentication and authorization middleware  
+// SUPPORTS OFFLINE-FIRST AUTHENTICATION
 import { defineNuxtRouteMiddleware, navigateTo, createError } from '#app';
 import { useAuthStore } from '~/stores/auth';
 import { getCookie } from 'h3';
 import type { OrgVerifyResponse } from '~/types/api';
 import { apiGet } from '~/utils/api';
+import { useOfflineAuth } from '~/composables/useOfflineAuth';
+import { useOfflineApi } from '~/composables/useOfflineApi';
 
 export default defineNuxtRouteMiddleware(async (to, from) => {
   const authStore = useAuthStore();
+  const offlineAuth = useOfflineAuth();
+  const { online } = useOfflineApi();
 
   // 1. SESSION VALIDATION - Ensure session cookie exists
   let sessionCookie;
@@ -65,21 +70,73 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   console.log('[Auth Guard] Session cookie retrieval method:', process.server ? 'Server-side' : 'Client-side');
   console.log('[Auth Guard] Retrieved session cookie:', sessionCookie);
 
+  // OFFLINE-FIRST: If no cookie but we're on client-side, check cached auth
+  if (!sessionCookie && process.client) {
+    console.log('🔍 [Auth Guard] No session cookie - checking offline authentication');
+    const offlineAuthResult = await offlineAuth.isAuthenticatedOffline();
+    
+    if (offlineAuthResult.authenticated && offlineAuthResult.user) {
+      console.log('✅ [Auth Guard] User authenticated via offline cache:', offlineAuthResult.method);
+      
+      // Load cached user into auth store
+      authStore.user = offlineAuthResult.user;
+      authStore.loggedIn = true;
+      
+      // Allow access - user is authenticated offline
+      return;
+    }
+  }
+
   if (!sessionCookie) {
-    console.warn('[Auth Guard] Missing session cookie. Redirecting to login.');
+    console.warn('[Auth Guard] Missing session cookie and no offline auth. Redirecting to login.');
     return navigateTo('/login?reason=missing_cookie');
   }
 
   console.log('[Auth Guard] Session cookie found:', sessionCookie);
 
   // 3. AUTHENTICATION - Ensure user is loaded and authenticated
+  // OFFLINE-FIRST: If offline, use cached user data
+  if (process.client && !online.value) {
+    console.log('📡 [Auth Guard] System is OFFLINE - using cached authentication');
+    
+    const cachedUser = await offlineAuth.getCachedUserData();
+    if (cachedUser) {
+      console.log('✅ [Auth Guard] Using cached user data (offline mode)');
+      authStore.user = cachedUser;
+      authStore.loggedIn = true;
+      // Skip server validation when offline
+      return;
+    } else {
+      console.warn('❌ [Auth Guard] No cached user data available for offline mode');
+      // Still try to fetch, might work if connectivity comes back
+    }
+  }
+
+  // ONLINE: Normal authentication flow
   try {
     if (!authStore.user && !authStore.loading) {
       await authStore.fetchUser();
+      
+      // Cache user data for offline use (if online)
+      if (online.value && authStore.user) {
+        await offlineAuth.cacheUserData(authStore.user, sessionCookie);
+      }
     }
     console.log('[Auth Guard] User data:', authStore.user);
   } catch (err) {
     console.warn('[Auth Guard] fetchUser failed:', err);
+    
+    // OFFLINE FALLBACK: If fetch failed due to network, try cached data
+    if (process.client) {
+      const cachedUser = await offlineAuth.getCachedUserData();
+      if (cachedUser) {
+        console.log('✅ [Auth Guard] Using cached user data (fetch failed)');
+        authStore.user = cachedUser;
+        authStore.loggedIn = true;
+        return;
+      }
+    }
+    
     return navigateTo('/login?reason=fetch_user_failed');
   }
 

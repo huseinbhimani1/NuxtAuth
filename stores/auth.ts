@@ -63,6 +63,13 @@ export const useAuthStore = defineStore('auth', {
           (data.user as any).role = normalizeRole((data.user as any).role);
           this.user = data.user as User;
           this.loggedIn = true;
+          
+          // Cache user data for offline use
+          if (process.client) {
+            const { useOfflineAuth } = await import('~/composables/useOfflineAuth');
+            const offlineAuth = useOfflineAuth();
+            await offlineAuth.cacheUserData(this.user);
+          }
         } else {
           this.user = null;
           this.loggedIn = false;
@@ -94,6 +101,15 @@ export const useAuthStore = defineStore('auth', {
           (response.user as any).role = normalizeRole((response.user as any).role);
           this.user = response.user as User;
           this.loggedIn = true;
+          
+          // Cache user data and token for offline use
+          if (process.client) {
+            const { useOfflineAuth } = await import('~/composables/useOfflineAuth');
+            const offlineAuth = useOfflineAuth();
+            const token = offlineAuth.getTokenFromCookie();
+            await offlineAuth.cacheUserData(this.user, token || undefined);
+          }
+          
           return true;
         }
 
@@ -116,6 +132,13 @@ export const useAuthStore = defineStore('auth', {
 
         this.user = null;
         this.loggedIn = false;
+        
+        // Clear offline auth cache
+        if (process.client) {
+          const { useOfflineAuth } = await import('~/composables/useOfflineAuth');
+          const offlineAuth = useOfflineAuth();
+          await offlineAuth.clearAuthCache();
+        }
       } catch (error) {
         console.error('Logout error:', error);
       } finally {
