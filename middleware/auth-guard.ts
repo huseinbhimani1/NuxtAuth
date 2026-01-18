@@ -10,21 +10,34 @@ import { useOfflineApi } from '~/composables/useOfflineApi';
 
 export default defineNuxtRouteMiddleware(async (to, from) => {
   const authStore = useAuthStore();
+  
+  // SERVER-SIDE: Skip auth check on server during offline scenarios
+  // Let client-side handle authentication with cached data
+  if (process.server) {
+    const event = useNuxtApp().ssrContext?.event;
+    if (event) {
+      const sessionCookie = getCookie(event, 'auth_token');
+      console.log('[Auth Guard] Server-side session cookie:', sessionCookie ? 'Found' : 'Not found');
+      
+      // If no cookie on server, allow render and let client-side check offline auth
+      if (!sessionCookie) {
+        console.log('⚠️ [Auth Guard] No server-side cookie - allowing client-side to handle auth');
+        return; // Don't redirect on server, let client decide
+      }
+      
+      // If cookie exists on server, continue with normal server-side auth
+      // (This will be handled by the fetchUser call below)
+    }
+    return; // Always allow server-side render, client will handle redirects
+  }
+
+  // CLIENT-SIDE ONLY from here on
   const offlineAuth = useOfflineAuth();
   const { online } = useOfflineApi();
 
   // 1. SESSION VALIDATION - Ensure session cookie exists
   let sessionCookie;
-  if (process.server) {
-    // Server-side: Use `getCookie`
-    const event = useNuxtApp().ssrContext?.event;
-    if (event) {
-      sessionCookie = getCookie(event, 'auth_token');
-      console.log('[Auth Guard] Server-side session cookie:', sessionCookie ? 'Found' : 'Not found');
-    } else {
-      console.warn('[Auth Guard] Server-side event object is undefined.');
-    }
-  } else {
+  if (process.client) {
     // Client-side: Multiple methods to find the cookie
     console.log('[Auth Guard] All cookies:', typeof document !== 'undefined' ? document.cookie : 'No document');
     
@@ -67,11 +80,11 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   }
 
   // Add detailed logs for debugging
-  console.log('[Auth Guard] Session cookie retrieval method:', process.server ? 'Server-side' : 'Client-side');
+  console.log('[Auth Guard] Client-side execution');
   console.log('[Auth Guard] Retrieved session cookie:', sessionCookie);
 
   // OFFLINE-FIRST: If no cookie but we're on client-side, check cached auth
-  if (!sessionCookie && process.client) {
+  if (!sessionCookie) {
     console.log('🔍 [Auth Guard] No session cookie - checking offline authentication');
     const offlineAuthResult = await offlineAuth.isAuthenticatedOffline();
     
@@ -85,9 +98,8 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
       // Allow access - user is authenticated offline
       return;
     }
-  }
-
-  if (!sessionCookie) {
+    
+    // No session cookie and no offline auth - redirect to login
     console.warn('[Auth Guard] Missing session cookie and no offline auth. Redirecting to login.');
     return navigateTo('/login?reason=missing_cookie');
   }
@@ -96,7 +108,7 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
 
   // 3. AUTHENTICATION - Ensure user is loaded and authenticated
   // OFFLINE-FIRST: If offline, use cached user data
-  if (process.client && !online.value) {
+  if (!online.value) {
     console.log('📡 [Auth Guard] System is OFFLINE - using cached authentication');
     
     const cachedUser = await offlineAuth.getCachedUserData();
@@ -127,14 +139,12 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     console.warn('[Auth Guard] fetchUser failed:', err);
     
     // OFFLINE FALLBACK: If fetch failed due to network, try cached data
-    if (process.client) {
-      const cachedUser = await offlineAuth.getCachedUserData();
-      if (cachedUser) {
-        console.log('✅ [Auth Guard] Using cached user data (fetch failed)');
-        authStore.user = cachedUser;
-        authStore.loggedIn = true;
-        return;
-      }
+    const cachedUser = await offlineAuth.getCachedUserData();
+    if (cachedUser) {
+      console.log('✅ [Auth Guard] Using cached user data (fetch failed)');
+      authStore.user = cachedUser;
+      authStore.loggedIn = true;
+      return;
     }
     
     return navigateTo('/login?reason=fetch_user_failed');
