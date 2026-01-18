@@ -7,9 +7,48 @@
 const onlineState = ref(true)
 let isInitialized = false
 let queueProcessor: (() => Promise<void>) | null = null
+let connectivityCheckInterval: NodeJS.Timeout | null = null
 
 export const useOfflineApi = () => {
   const storage = useOfflineStorage()
+
+  /**
+   * Check actual internet connectivity (not just network interface)
+   */
+  const checkConnectivity = async (): Promise<boolean> => {
+    if (!navigator.onLine) {
+      return false
+    }
+    
+    try {
+      // Try to fetch a small resource with no-cache to test real connectivity
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 3000)
+      
+      await fetch('/api/health', {
+        method: 'HEAD',
+        cache: 'no-cache',
+        signal: controller.signal
+      })
+      
+      clearTimeout(timeoutId)
+      return true
+    } catch (error) {
+      console.log('⚠️ Connectivity check failed, treating as offline')
+      return false
+    }
+  }
+
+  /**
+   * Update online status with connectivity check
+   */
+  const updateOnlineStatus = async () => {
+    const isConnected = await checkConnectivity()
+    if (onlineState.value !== isConnected) {
+      onlineState.value = isConnected
+      console.log(isConnected ? '✅ Connected to internet' : '❌ No internet connection')
+    }
+  }
 
   /**
    * Process queued actions when back online
@@ -33,18 +72,26 @@ export const useOfflineApi = () => {
   // Initialize online/offline listeners only once
   if (process.client && !isInitialized) {
     isInitialized = true
-    onlineState.value = navigator.onLine
+    
+    // Initial check
+    checkConnectivity().then(isConnected => {
+      onlineState.value = isConnected
+      console.log('🔍 Initial connectivity:', isConnected ? 'Online' : 'Offline')
+    })
 
-    window.addEventListener('online', () => {
-      onlineState.value = true
-      console.log('Back online! You can now sync your changes.')
-      // Manual sync - user must tap Sync Now button
+    // Listen to browser events
+    window.addEventListener('online', async () => {
+      console.log('📡 Network interface connected, verifying internet...')
+      await updateOnlineStatus()
     })
 
     window.addEventListener('offline', () => {
       onlineState.value = false
-      console.log('Gone offline. Data will be cached locally.')
+      console.log('📡 Network interface disconnected')
     })
+    
+    // Periodic connectivity check (every 10 seconds)
+    connectivityCheckInterval = setInterval(updateOnlineStatus, 10000)
   }
 
   // Use computed to ensure reactivity

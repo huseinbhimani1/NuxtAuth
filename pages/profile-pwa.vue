@@ -25,7 +25,7 @@
       </div>
 
       <!-- Loading State -->
-      <div v-if="loading" class="bg-white rounded-lg shadow-md p-8">
+      <div v-if="loading && !profile" class="bg-white rounded-lg shadow-md p-8">
         <div class="flex items-center justify-center">
           <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           <span class="ml-3 text-gray-600">Loading...</span>
@@ -33,7 +33,7 @@
       </div>
 
       <!-- Error State -->
-      <div v-else-if="error && !profile" class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+      <div v-else-if="error && !profile && !loading" class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
         <div class="flex items-center">
           <svg class="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
@@ -46,8 +46,8 @@
         </div>
       </div>
 
-      <!-- Profile Content (Show even if offline with no data) -->
-      <div v-if="profile || !online" class="bg-white rounded-lg shadow-md p-6">
+      <!-- Profile Content (Show if profile exists, or if loading finished, or if offline) -->
+      <div v-if="profile || (!loading && (error || !online))" class="bg-white rounded-lg shadow-md p-6">
         <!-- Queued Changes Banner with Sync Button -->
         <div v-if="hasQueuedChanges" class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
           <div class="flex items-center justify-between">
@@ -291,7 +291,7 @@ const loadProfile = async () => {
       
       // Show indicator if we're offline
       if (!online.value) {
-        successMessage.value = 'Loaded from local storage (offline)'
+        successMessage.value = '✅ Loaded from local storage (offline)'
         setTimeout(() => {
           successMessage.value = ''
         }, 2000)
@@ -299,6 +299,22 @@ const loadProfile = async () => {
     }
   } catch (err: any) {
     error.value = err.message || 'Failed to load profile'
+    
+    // If offline with no cached data, initialize empty form
+    if (!online.value && !profile.value) {
+      console.log('📝 No cached profile, initializing empty form for offline editing')
+      profile.value = { user: {} }
+      formData.value = {
+        name: '',
+        email: '',
+        bio: ''
+      }
+      error.value = '' // Clear error for offline mode
+      successMessage.value = 'ℹ️ No saved profile. You can create one offline!'
+      setTimeout(() => {
+        successMessage.value = ''
+      }, 3000)
+    }
   } finally {
     loading.value = false
   }
